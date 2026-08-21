@@ -1,4 +1,0 @@
-algorithm=token_bucket
-capacity=10
-refill_rate=1
-redis_url=tcp://127.0.0.1:6379

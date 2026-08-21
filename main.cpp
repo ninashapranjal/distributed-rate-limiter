@@ -1,4 +1,5 @@
 #include "rate_limiter/TokenBucket.h"
+#include "rate_limiter/Config.h"
 
 #include <sw/redis++/redis++.h>
 
@@ -6,38 +7,31 @@
 #include <thread>
 #include <chrono>
 
-int main() {
+int main(int argc, char* argv[]) {
+
+    Config config = parseArguments(argc, argv);
+
     try {
-        sw::redis::Redis redis(
-            "tcp://127.0.0.1:6379"
-        );
+        sw::redis::Redis redis(config.redis_url);
 
         std::cout << "Connected to Redis\n";
 
         TokenBucket limiter(
             redis,
-            10,                 // capacity
-            1.0,                // refill rate
+            config.capacity,
+            config.refill_rate,
             "lua/token_bucket.lua"
-        );
+            );
 
         for (int i = 1; i <= 15; i++) {
 
-            bool allowed = limiter.allow(
-                "user1"
-            );
+            bool allowed = limiter.allow(config.client_id);
 
             if (allowed) {
-                std::cout
-                    << "Request "
-                    << i
-                    << ": ALLOWED\n";
+                std::cout << "Request " << i << ": ALLOWED\n";
             }
             else {
-                std::cout
-                    << "Request "
-                    << i
-                    << ": BLOCKED\n";
+                std::cout << "Request " << i << ": BLOCKED\n";
             }
 
             std::this_thread::sleep_for(
