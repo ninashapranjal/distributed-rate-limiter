@@ -2,11 +2,11 @@
 Implementing rate-limiting algorithms in C++ with Redis and Lua.
 
 ## Algorithms
-- Token Bucket - implemented
+- Token Bucket - implemented 
 - Leaky Bucket - planned
 - Fixed Window Counter - planned
 - Sliding Window Log - planned
-- Sliding Window Counter - planned
+- Sliding Window Counter - implemented (revise)
 
 ## Overview
 ....
