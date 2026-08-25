@@ -37,8 +37,18 @@ int main(int argc, char* argv[]) {
                 config.limit,
                 config.window
             );
+        }
+        
+        else if (config.algorithm == "sliding-counter") {
+
+            limiter = std::make_unique<SlidingWindowCounter>(
+                redis,
+                config.limit,
+                config.window
+            );
 
         }
+
         else {
             throw std::runtime_error(
                 "Unknown algorithm: " + config.algorithm

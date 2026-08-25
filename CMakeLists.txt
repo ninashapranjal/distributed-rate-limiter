@@ -10,6 +10,7 @@ add_executable(rate_limiter
     src/Config.cpp
     src/TokenBucket.cpp
     src/FixedWindow.cpp
+    src/SlidingWindowCounter.cpp
 )
 
 target_include_directories(rate_limiter PRIVATE

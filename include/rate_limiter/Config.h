@@ -9,7 +9,7 @@ struct Config {
     int capacity = 10;
     double refill_rate = 1.0;
 
-    // for fixed window
+    // for fixed window and sliding window
     int limit = 100;
     int window = 60;
 
