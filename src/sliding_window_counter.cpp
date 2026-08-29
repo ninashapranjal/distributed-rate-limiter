@@ -1,41 +1,29 @@
 #include "rate_limiter/SlidingWindowCounter.h"
 
 #include <chrono>
-#include <cmath>
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 
 using namespace sw::redis;
 
 namespace {
 
-const char* SLIDING_WINDOW_SCRIPT = R"(
-    local current_count = tonumber(redis.call("GET", KEYS[1])) or 0
-    local previous_count = tonumber(redis.call("GET", KEYS[2])) or 0
+std::string loadScript(const std::string& filename) {
+    std::ifstream file(filename);
 
-    local elapsed = tonumber(ARGV[1])
-    local window = tonumber(ARGV[2])
-    local requested = tonumber(ARGV[3])
-    local limit = tonumber(ARGV[4])
+    if (!file.is_open()) {
+        throw std::runtime_error(
+            "Could not open Lua script: " + filename
+        );
+    }
 
-    local previous_weight = (window - elapsed) / window
+    std::stringstream buffer;
+    buffer << file.rdbuf();
 
-    local estimated_count =
-        previous_count * previous_weight + current_count
-
-    if estimated_count + requested <= limit then
-        redis.call("INCRBY", KEYS[1], requested)
-
-        redis.call(
-            "EXPIRE",
-            KEYS[1],
-            window
-        )
-
-        return 1
-    end
-
-    return 0
-)";
+    return buffer.str();
+}
 
 long long currentTimeSeconds() {
     return std::chrono::duration_cast<
@@ -64,12 +52,15 @@ bool SlidingWindowCounter::allow(
 ) {
     long long now = currentTimeSeconds();
 
+    // find which window we are currently in
     long long current_window =
         now / window_seconds_;
 
+    // how far into the current window we are
     long long elapsed =
         now % window_seconds_;
 
+    // redis key for current window
     std::string current_key =
         "ratelimit:sliding-counter:" +
         client_id +
@@ -82,8 +73,11 @@ bool SlidingWindowCounter::allow(
         ":" +
         std::to_string(current_window - 1);
 
+    std::string script =
+        loadScript("lua/sliding_window_counter.lua");
+
     auto result = redis_.eval<long long>(
-        SLIDING_WINDOW_SCRIPT,
+        script,
         {current_key, previous_key},
         {
             std::to_string(elapsed),
