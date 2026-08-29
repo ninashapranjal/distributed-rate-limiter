@@ -7,10 +7,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(rate_limiter
     main.cpp
-    src/Config.cpp
-    src/TokenBucket.cpp
-    src/FixedWindow.cpp
-    src/SlidingWindowCounter.cpp
+    src/config.cpp
+    src/token_bucket.cpp
+    src/fixed_window.cpp
+    src/sliding_window_counter.cpp
+    src/sliding_window_log.cpp
+    src/LeakyBucket.cpp
 )
 
 target_include_directories(rate_limiter PRIVATE
