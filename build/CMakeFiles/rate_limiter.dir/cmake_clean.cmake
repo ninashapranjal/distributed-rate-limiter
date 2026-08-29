@@ -7,6 +7,8 @@ file(REMOVE_RECURSE
   "CMakeFiles/rate_limiter.dir/src/fixed_window.cpp.o.d"
   "CMakeFiles/rate_limiter.dir/src/sliding_window_counter.cpp.o"
   "CMakeFiles/rate_limiter.dir/src/sliding_window_counter.cpp.o.d"
+  "CMakeFiles/rate_limiter.dir/src/sliding_window_log.cpp.o"
+  "CMakeFiles/rate_limiter.dir/src/sliding_window_log.cpp.o.d"
   "CMakeFiles/rate_limiter.dir/src/token_bucket.cpp.o"
   "CMakeFiles/rate_limiter.dir/src/token_bucket.cpp.o.d"
   "rate_limiter"

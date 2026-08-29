@@ -225,6 +225,30 @@ src/sliding_window_counter.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/rate_limiter.dir/build.make CMakeFiles/rate_limiter.dir/src/sliding_window_counter.cpp.s
 .PHONY : src/sliding_window_counter.cpp.s
 
+src/sliding_window_log.o: src/sliding_window_log.cpp.o
+.PHONY : src/sliding_window_log.o
+
+# target to build an object file
+src/sliding_window_log.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/rate_limiter.dir/build.make CMakeFiles/rate_limiter.dir/src/sliding_window_log.cpp.o
+.PHONY : src/sliding_window_log.cpp.o
+
+src/sliding_window_log.i: src/sliding_window_log.cpp.i
+.PHONY : src/sliding_window_log.i
+
+# target to preprocess a source file
+src/sliding_window_log.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/rate_limiter.dir/build.make CMakeFiles/rate_limiter.dir/src/sliding_window_log.cpp.i
+.PHONY : src/sliding_window_log.cpp.i
+
+src/sliding_window_log.s: src/sliding_window_log.cpp.s
+.PHONY : src/sliding_window_log.s
+
+# target to generate assembly for a file
+src/sliding_window_log.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/rate_limiter.dir/build.make CMakeFiles/rate_limiter.dir/src/sliding_window_log.cpp.s
+.PHONY : src/sliding_window_log.cpp.s
+
 src/token_bucket.o: src/token_bucket.cpp.o
 .PHONY : src/token_bucket.o
 
@@ -270,6 +294,9 @@ help:
 	@echo "... src/sliding_window_counter.o"
 	@echo "... src/sliding_window_counter.i"
 	@echo "... src/sliding_window_counter.s"
+	@echo "... src/sliding_window_log.o"
+	@echo "... src/sliding_window_log.i"
+	@echo "... src/sliding_window_log.s"
 	@echo "... src/token_bucket.o"
 	@echo "... src/token_bucket.i"
 	@echo "... src/token_bucket.s"

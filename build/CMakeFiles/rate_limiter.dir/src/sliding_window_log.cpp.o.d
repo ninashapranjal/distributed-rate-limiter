@@ -1,7 +1,7 @@
-CMakeFiles/rate_limiter.dir/src/sliding_window_counter.cpp.o: \
- /home/pshahi/CodingProjects/distributed-rate-limiter/src/sliding_window_counter.cpp \
+CMakeFiles/rate_limiter.dir/src/sliding_window_log.cpp.o: \
+ /home/pshahi/CodingProjects/distributed-rate-limiter/src/sliding_window_log.cpp \
  /usr/include/stdc-predef.h \
- /home/pshahi/CodingProjects/distributed-rate-limiter/include/rate_limiter/SlidingWindowCounter.h \
+ /home/pshahi/CodingProjects/distributed-rate-limiter/include/rate_limiter/SlidingWindowLog.h \
  /home/pshahi/CodingProjects/distributed-rate-limiter/include/rate_limiter/RateLimiter.h \
  /usr/include/c++/13/string /usr/include/c++/13/bits/requires_hosted.h \
  /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h \

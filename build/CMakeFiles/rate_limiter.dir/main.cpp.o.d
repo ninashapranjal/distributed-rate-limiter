@@ -265,4 +265,5 @@ CMakeFiles/rate_limiter.dir/main.cpp.o: \
  /usr/local/include/sw/redis++/queued_redis.hpp \
  /home/pshahi/CodingProjects/distributed-rate-limiter/include/rate_limiter/TokenBucket.h \
  /home/pshahi/CodingProjects/distributed-rate-limiter/include/rate_limiter/SlidingWindowCounter.h \
+ /home/pshahi/CodingProjects/distributed-rate-limiter/include/rate_limiter/SlidingWindowLog.h \
  /usr/include/c++/13/iostream
