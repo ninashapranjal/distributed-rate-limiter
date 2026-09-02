@@ -63,7 +63,7 @@ bool TokenBucket::allow(
         to_string(requested)
     };
 
-    auto result = redis_.evalsha<vector<double>>(
+    auto result = redis_.evalsha<long long>(
         script_sha_,
         keys.begin(),
         keys.end(),
@@ -71,5 +71,5 @@ bool TokenBucket::allow(
         args.end()
     );
 
-    return result[0] == 1;
+    return result == 1;
 }

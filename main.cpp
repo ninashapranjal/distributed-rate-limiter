@@ -1,6 +1,9 @@
 #include "rate_limiter/Config.h"
 #include "rate_limiter/FixedWindow.h"
 #include "rate_limiter/TokenBucket.h"
+#include "rate_limiter/SlidingWindowCounter.h"
+#include "rate_limiter/SlidingWindowLog.h"
+#include "rate_limiter/LeakyBucket.h"
 
 #include <sw/redis++/redis++.h>
 
@@ -26,7 +29,7 @@ int main(int argc, char* argv[]) {
                 redis,
                 config.capacity,
                 config.refill_rate,
-                "lua/token_bucket.lua"
+                "../lua/token_bucket.lua"
             );
 
         }
@@ -47,6 +50,27 @@ int main(int argc, char* argv[]) {
                 config.window
             );
 
+        }
+
+        else if (config.algorithm == "sliding-log") {
+
+            limiter = std::make_unique<SlidingWindowLog>(
+            redis,
+            config.limit,
+            config.window,
+            "../lua/sliding_window_log.lua"
+        );
+
+        }
+
+        else if (config.algorithm == "leaky-bucket") {
+
+            limiter = std::make_unique<LeakyBucket>(
+            redis,
+            config.capacity,
+            config.leak_rate,
+            "../lua/leaky_bucket.lua"
+            );
         }
 
         else {

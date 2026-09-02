@@ -71,7 +71,7 @@ bool LeakyBucket::allow(
         std::to_string(now),
         std::to_string(requested)
     };
-
+    
     auto result = redis_.evalsha<long long>(
         script_sha_,
         keys.begin(),

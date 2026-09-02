@@ -50,4 +50,4 @@ redis.call(
     now -- current timestamp
 )
 
-return {allowed, tokens}
+return allowed
