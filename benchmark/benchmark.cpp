@@ -8,12 +8,23 @@
 #include <sw/redis++/redis++.h>
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <cstddef>
+#include <cstdlib>
+#include <exception>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <mutex>
+#include <numeric>
+#include <stdexcept>
 #include <string>
 #include <thread>
-
+#include <vector>
 
 namespace {
-
 
 //benchmarking configuration
 struct Options{
@@ -171,4 +182,109 @@ double percentile_us(const std::vector<double>& sorted_samples, double percentil
     return sorted_samples[index];
 }
 
+}
+
+int main(int argc, char* argv[]) {
+    try {
+        const Options options = parse_options(argc, argv);
+
+        sw::redis::ConnectionOptions connection_options;
+        connection_options.host = options.redis_host;
+        connection_options.port = options.redis_port;
+        connection_options.connect_timeout = std::chrono::milliseconds(1000);
+        connection_options.socket_timeout = std::chrono::milliseconds(1000);
+
+        sw::redis::ConnectionPoolOptions pool_options;
+        pool_options.size = options.pool_size;
+        pool_options.wait_timeout = std::chrono::milliseconds(options.pool_wait_ms);
+        sw::redis::Redis redis(connection_options, pool_options);
+        auto limiter = make_limiter(redis, options);
+
+        std::atomic<std::size_t> next_request{0};
+        std::atomic<std::size_t> allowed{0};
+        std::atomic<std::size_t> rejected{0};
+        std::atomic<std::size_t> errors{0};
+        std::mutex error_mutex;
+        std::string first_error;
+        std::vector<std::vector<double>> latencies(options.threads);
+        StartGate start_gate(options.threads + 1);
+        std::vector<std::thread> workers;
+        workers.reserve(options.threads);
+
+        for (std::size_t worker = 0; worker < options.threads; ++worker) {
+            workers.emplace_back([&, worker] {
+                auto& local_latencies = latencies[worker];
+                local_latencies.reserve(options.requests / options.threads + 1);
+                start_gate.arrive_and_wait();
+
+                while (true) {
+                    const std::size_t request = next_request.fetch_add(1, std::memory_order_relaxed);
+                    if (request >= options.requests) {
+                        break;
+                    }
+                    const std::string client_id = options.key_prefix + ":client:" +
+                                                  std::to_string(request % options.clients);
+                    const auto begin = std::chrono::steady_clock::now();
+                    try {
+                        if (limiter->allow(client_id)) {
+                            allowed.fetch_add(1, std::memory_order_relaxed);
+                        } else {
+                            rejected.fetch_add(1, std::memory_order_relaxed);
+                        }
+                    } catch (const std::exception& error) {
+                        errors.fetch_add(1, std::memory_order_relaxed);
+                        std::lock_guard<std::mutex> lock(error_mutex);
+                        if (first_error.empty()) {
+                            first_error = error.what();
+                        }
+                    }
+                    const auto elapsed = std::chrono::steady_clock::now() - begin;
+                    local_latencies.push_back(
+                        std::chrono::duration<double, std::micro>(elapsed).count());
+                }
+            });
+        }
+
+        start_gate.arrive_and_wait();
+        const auto started = std::chrono::steady_clock::now();
+        for (auto& worker : workers) {
+            worker.join();
+        }
+        const double elapsed_seconds = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - started).count();
+
+        std::vector<double> all_latencies;
+        all_latencies.reserve(options.requests);
+        for (auto& samples : latencies) {
+            all_latencies.insert(all_latencies.end(), samples.begin(), samples.end());
+        }
+        std::sort(all_latencies.begin(), all_latencies.end());
+        const double average_us = std::accumulate(all_latencies.begin(), all_latencies.end(), 0.0) /
+                                  all_latencies.size();
+
+        std::cout << std::fixed << std::setprecision(2);
+        std::cout << "Benchmark results\n"
+                  << "  Algorithm:         " << options.algorithm << '\n'
+                  << "  Requests:          " << options.requests << '\n'
+                  << "  Clients:           " << options.clients << '\n'
+                  << "  Threads:           " << options.threads << '\n'
+                  << "  Redis pool size:   " << options.pool_size << '\n'
+                  << "  Elapsed:           " << elapsed_seconds << " s\n"
+                  << "  Requests/sec:      " << options.requests / elapsed_seconds << '\n'
+                  << "  Average latency:   " << average_us << " us\n"
+                  << "  P50 latency:       " << percentile_us(all_latencies, 0.50) << " us\n"
+                  << "  P95 latency:       " << percentile_us(all_latencies, 0.95) << " us\n"
+                  << "  P99 latency:       " << percentile_us(all_latencies, 0.99) << " us\n"
+                  << "  Allowed requests:  " << allowed.load() << '\n'
+                  << "  Rejected requests: " << rejected.load() << '\n'
+                  << "  Errors:            " << errors.load() << '\n';
+        if (!first_error.empty()) {
+            std::cerr << "First request error: " << first_error << '\n';
+            return 2;
+        }
+        return 0;
+    } catch (const std::exception& error) {
+        std::cerr << "Benchmark failed: " << error.what() << '\n';
+        return 1;
+    }
 }
