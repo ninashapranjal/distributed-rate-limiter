@@ -207,7 +207,7 @@ int main(int argc, char* argv[]) {
         std::mutex error_mutex;
         std::string first_error;
         std::vector<std::vector<double>> latencies(options.threads);
-        StartGate start_gate(options.threads + 1);
+        StartSignal start_gate(options.threads + 1);
         std::vector<std::thread> workers;
         workers.reserve(options.threads);
 
