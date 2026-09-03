@@ -46,6 +46,10 @@ SlidingWindowLog::SlidingWindowLog(
       limit_(limit),
       window_seconds_(window_seconds)
 {
+    if (limit_ <= 0 || window_seconds_ <= 0) {
+        throw std::invalid_argument("limit and window length must be positive");
+    }
+
     std::string script = loadScript(script_path);
 
     script_sha_ = redis_.script_load(script);
@@ -55,18 +59,19 @@ bool SlidingWindowLog::allow(
     const std::string& client_id,
     int requested
 ) {
+    if (requested <= 0) {
+        throw std::invalid_argument("requested tokens must be positive");
+    }
 
     std::string key =
         "ratelimit:sliding-log:" + client_id;
 
-    double now = currentTime();
-
     std::vector<std::string> keys = {
-        key
+        key,
+        key + ":sequence"
     };
 
     std::vector<std::string> args = {
-        std::to_string(now),
         std::to_string(window_seconds_),
         std::to_string(limit_),
         std::to_string(requested)

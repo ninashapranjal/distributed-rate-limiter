@@ -46,6 +46,10 @@ LeakyBucket::LeakyBucket(
       capacity_(capacity),
       leak_rate_(leak_rate)
 {
+    if (capacity_ <= 0 || leak_rate_ < 0) {
+        throw std::invalid_argument("capacity must be positive and leak rate cannot be negative");
+    }
+
     std::string script = loadScript(script_path);
 
     script_sha_ = redis_.script_load(script);
@@ -55,11 +59,12 @@ bool LeakyBucket::allow(
     const std::string& client_id,
     int requested
 ) {
+    if (requested <= 0) {
+        throw std::invalid_argument("requested tokens must be positive");
+    }
 
     std::string key =
         "ratelimit:leaky:" + client_id;
-
-    double now = currentTime();
 
     std::vector<std::string> keys = {
         key
@@ -68,7 +73,6 @@ bool LeakyBucket::allow(
     std::vector<std::string> args = {
         std::to_string(capacity_),
         std::to_string(leak_rate_),
-        std::to_string(now),
         std::to_string(requested)
     };
     

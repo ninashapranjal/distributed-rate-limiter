@@ -9,34 +9,28 @@ using namespace sw::redis;
 namespace {
 
 const char* FIXED_WINDOW_SCRIPT = R"(
-    local current = redis.call("GET", KEYS[1])
+    local requested = tonumber(ARGV[1])
+    local window = tonumber(ARGV[2])
+    local limit = tonumber(ARGV[3])
+    local time = redis.call("TIME")
+    local now = tonumber(time[1])
+    local window_id = math.floor(now / window)
+    local key = KEYS[1] .. ":" .. window_id
+    local current = tonumber(redis.call("GET", key)) or 0
 
-    if not current then
-        redis.call("SET", KEYS[1], ARGV[1], "EX", ARGV[2])
-        return 1
-    end
-
-    if tonumber(current) + tonumber(ARGV[1]) <= tonumber(ARGV[3]) then
-        redis.call("INCRBY", KEYS[1], ARGV[1])
+    if current + requested <= limit then
+        redis.call("INCRBY", key, requested)
+        -- Expire at the next global window boundary, not one full window after
+        -- the first request. This preserves fixed-window alignment.
+        if current == 0 then
+            local ttl = window - (now % window)
+            redis.call("EXPIRE", key, ttl)
+        end
         return 1
     end
 
     return 0
 )";
-
-long long currentWindow(
-    int window_seconds
-) {
-    auto now = std::chrono::system_clock::now();
-
-    auto seconds = std::chrono::duration_cast<
-        std::chrono::seconds
-    >(
-        now.time_since_epoch()
-    ).count();
-
-    return seconds / window_seconds;
-}
 
 }
 
@@ -49,19 +43,20 @@ FixedWindow::FixedWindow(
       limit_(limit),
       window_seconds_(window_seconds)
 {
+    if (limit_ <= 0 || window_seconds_ <= 0) {
+        throw std::invalid_argument("limit and window length must be positive");
+    }
 }
 
 bool FixedWindow::allow(
     const std::string& client_id,
     int requested
 ) {
-    long long window = currentWindow(window_seconds_);
+    if (requested <= 0) {
+        throw std::invalid_argument("requested tokens must be positive");
+    }
 
-    std::string key =
-        "ratelimit:fixed:" +
-        client_id +
-        ":" +
-        std::to_string(window);
+    const std::string key = "ratelimit:fixed:" + client_id;
 
     auto result = redis_.eval<long long>(
         FIXED_WINDOW_SCRIPT,

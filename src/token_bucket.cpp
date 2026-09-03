@@ -39,6 +39,10 @@ TokenBucket::TokenBucket(
       capacity_(capacity),
       refill_rate_(refill_rate)
 {
+    if (capacity_ <= 0 || refill_rate_ < 0) {
+        throw invalid_argument("capacity must be positive and refill rate cannot be negative");
+    }
+
     string script = loadScript(script_path);
 
     script_sha_ = redis_.script_load(script);
@@ -48,9 +52,11 @@ bool TokenBucket::allow(
     const string& client_id,
     int requested
 ) {
-    string key = "ratelimit:" + client_id;
+    if (requested <= 0) {
+        throw invalid_argument("requested tokens must be positive");
+    }
 
-    double now = currentTime();
+    string key = "ratelimit:" + client_id;
 
     vector<string> keys = {
         key
@@ -59,7 +65,6 @@ bool TokenBucket::allow(
     vector<string> args = {
         to_string(capacity_),
         to_string(refill_rate_),
-        to_string(now),
         to_string(requested)
     };
 
