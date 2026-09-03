@@ -1,9 +1,11 @@
 local key = KEYS[1]
 
-local now = tonumber(ARGV[1])
-local window = tonumber(ARGV[2])
-local limit = tonumber(ARGV[3])
-local requested = tonumber(ARGV[4])
+local sequence_key = KEYS[2]
+local window = tonumber(ARGV[1])
+local limit = tonumber(ARGV[2])
+local requested = tonumber(ARGV[3])
+local time = redis.call("TIME")
+local now = tonumber(time[1]) + tonumber(time[2]) / 1000000
 
 local window_start = now - window
 
@@ -27,8 +29,9 @@ if current_count + requested <= limit then
     -- add requets
     for i = 1, requested do
 
-        local request_id =
-            tostring(now) .. ":" .. tostring(i) .. ":" .. tostring(math.random())
+        -- redis serializes Lua execution, and INCR creates a collision-free
+        -- member ID even when TIME returns the same microsecond twice.
+        local request_id = tostring(now) .. ":" .. redis.call("INCR", sequence_key)
 
         redis.call(
             "ZADD",
@@ -45,6 +48,7 @@ if current_count + requested <= limit then
         key,
         window
     )
+    redis.call("EXPIRE", sequence_key, window)
 
     return 1
 end
