@@ -2,8 +2,9 @@ local key = KEYS[1]
 
 local capacity = tonumber(ARGV[1])
 local leak_rate = tonumber(ARGV[2])
-local now = tonumber(ARGV[3])
-local requested = tonumber(ARGV[4])
+local requested = tonumber(ARGV[3])
+local redis_time = redis.call("TIME")
+local now = tonumber(redis_time[1]) + tonumber(redis_time[2]) / 1000000
 
 -- get current bucket state
 local data = redis.call(
@@ -23,6 +24,9 @@ end
 
 -- calculate how much has leaked since last update
 local elapsed = now - last_update
+if elapsed < 0 then
+    elapsed = 0
+end
 
 local leaked = elapsed * leak_rate
 
@@ -51,10 +55,10 @@ redis.call(
 )
 
 -- keep key alive
-redis.call(
-    "EXPIRE",
-    key,
-    math.ceil(capacity / leak_rate) + 1
-)
+-- with no leak the level must persist, otherwise expiration would incorrectly
+-- reset a permanently full bucket. A positive leak can expire once fully empty.
+if leak_rate > 0 then
+    redis.call("EXPIRE", key, math.ceil(capacity / leak_rate) + 1)
+end
 
 return allowed
