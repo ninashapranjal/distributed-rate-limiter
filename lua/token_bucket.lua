@@ -3,8 +3,12 @@ local key = KEYS[1] -- client_id
 
 local capacity = tonumber(ARGV[1])
 local refill_rate = tonumber(ARGV[2])
-local now = tonumber(ARGV[3])
-local requested = tonumber(ARGV[4])
+local requested = tonumber(ARGV[3])
+
+-- redis is the single authority for time. This avoids different benchmark
+-- processes (or hosts) making inconsistent refill decisions because of clock skew.
+local redis_time = redis.call("TIME")
+local now = tonumber(redis_time[1]) + tonumber(redis_time[2]) / 1000000
 
 -- geting the current bucket state
 local data = redis.call(
@@ -25,6 +29,9 @@ end
 
 -- how much time has passed since last request
 local elapsed = now - last_refill
+if elapsed < 0 then
+    elapsed = 0
+end
 
 tokens = tokens + (elapsed * refill_rate)
 
@@ -49,5 +56,11 @@ redis.call(
     "last_refill",
     now -- current timestamp
 )
+
+-- A bucket needs state only until it is full. Zero-refill buckets deliberately
+-- retain their state, since they must not become full again after eviction.
+if refill_rate > 0 then
+    redis.call("EXPIRE", key, math.ceil(capacity / refill_rate) + 1)
+end
 
 return allowed
