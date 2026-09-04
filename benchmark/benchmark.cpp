@@ -26,26 +26,24 @@
 
 namespace {
 
-//benchmarking configuration
-struct Options{
-  std::string algorithm = "token-bucket"; //default
-  std::size_t clients = 100;
-  std::size_t clients = 100;
-  std::size_t requests = 100000;
-  std::size_t threads = std::max(1u, std::thread::hardware_concurrency());
-  std::size_t pool_size = 0;
-  int pool_wait_ms = 1000;
-  int capacity = 10;
-  double refill_rate = 1.0;
-  int limit = 100;
-  int window = 60;
-  double leak_rate = 1.0;
-  std::string redis_host = "127.0.0.1";
-  int redis_port = 6379;
-  std::string key_prefix = "benchmark";
+struct Options {
+    std::string algorithm = "token-bucket";
+    std::size_t clients = 100;
+    std::size_t requests = 100000;
+    std::size_t threads = std::max(1u, std::thread::hardware_concurrency());
+    std::size_t pool_size = 0;  // 0 means one connection per worker.
+    int pool_wait_ms = 1000;
+    int capacity = 10;
+    double refill_rate = 1.0;
+    int limit = 100;
+    int window = 60;
+    double leak_rate = 1.0;
+    std::string redis_host = "127.0.0.1";
+    int redis_port = 6379;
+    std::string key_prefix = "benchmark";
+    std::string format = "text";
 };
 
-//ensure all threads start benchmark at approx the same time
 class StartSignal {
   public:
     explicit StartSignal(std::size_t participants) : participants_(participants) {}
@@ -85,7 +83,8 @@ void usage(const char* program) {
         << "  --window N             Window length in seconds (default: 60)\n"
         << "  --redis-host HOST      Redis hostname (default: 127.0.0.1)\n"
         << "  --redis-port PORT      Redis port (default: 6379)\n"
-        << "  --key-prefix PREFIX    Prefix used for benchmark keys (default: benchmark)\n";
+        << "  --key-prefix PREFIX    Prefix used for benchmark keys (default: benchmark)\n"
+        << "  --format FORMAT        text or csv (default: text)\n";
 }
 
 std::string take_value(int& index, int argc, char* argv[], const std::string& option) {
@@ -130,6 +129,8 @@ Options parse_options(int argc, char* argv[]) {
             options.redis_port = std::stoi(take_value(i, argc, argv, arg));
         } else if (arg == "--key-prefix") {
             options.key_prefix = take_value(i, argc, argv, arg);
+        } else if (arg == "--format") {
+            options.format = take_value(i, argc, argv, arg);
         } else {
             throw std::runtime_error("Unknown option: " + arg);
         }
@@ -144,18 +145,20 @@ Options parse_options(int argc, char* argv[]) {
     if (options.pool_size == 0) {
         options.pool_size = options.threads;
     }
+    if (options.format != "text" && options.format != "csv") {
+        throw std::runtime_error("--format must be text or csv");
+    }
     return options;
 }
 
 std::string lua_path(const std::string& filename) {
-    // Invoke the executable from the repository root, as shown in the README.
+    // invoke the executable from the repository root, as shown in the README
     return "lua/" + filename;
 }
 
 std::unique_ptr<RateLimiter> make_limiter(sw::redis::Redis& redis, const Options& options) {
     if (options.algorithm == "token-bucket") {
-        return std::make_unique<TokenBucket>(redis, options.capacity, options.refill_rate,
-                                             lua_path("token_bucket.lua"));
+        return std::make_unique<TokenBucket>(redis, options.capacity, options.refill_rate, lua_path("token_bucket.lua"));
     }
     if (options.algorithm == "fixed-window") {
         return std::make_unique<FixedWindow>(redis, options.limit, options.window);
@@ -164,12 +167,10 @@ std::unique_ptr<RateLimiter> make_limiter(sw::redis::Redis& redis, const Options
         return std::make_unique<SlidingWindowCounter>(redis, options.limit, options.window);
     }
     if (options.algorithm == "sliding-log") {
-        return std::make_unique<SlidingWindowLog>(redis, options.limit, options.window,
-                                                   lua_path("sliding_window_log.lua"));
+        return std::make_unique<SlidingWindowLog>(redis, options.limit, options.window, lua_path("sliding_window_log.lua"));
     }
     if (options.algorithm == "leaky-bucket") {
-        return std::make_unique<LeakyBucket>(redis, options.capacity, options.leak_rate,
-                                              lua_path("leaky_bucket.lua"));
+        return std::make_unique<LeakyBucket>(redis, options.capacity, options.leak_rate, lua_path("leaky_bucket.lua"));
     }
     throw std::runtime_error("Unknown algorithm: " + options.algorithm);
 }
@@ -182,7 +183,7 @@ double percentile_us(const std::vector<double>& sorted_samples, double percentil
     return sorted_samples[index];
 }
 
-}
+} 
 
 int main(int argc, char* argv[]) {
     try {
@@ -207,7 +208,7 @@ int main(int argc, char* argv[]) {
         std::mutex error_mutex;
         std::string first_error;
         std::vector<std::vector<double>> latencies(options.threads);
-        StartSignal start_gate(options.threads + 1);
+        StartSignal start_signal(options.threads + 1);
         std::vector<std::thread> workers;
         workers.reserve(options.threads);
 
@@ -215,7 +216,7 @@ int main(int argc, char* argv[]) {
             workers.emplace_back([&, worker] {
                 auto& local_latencies = latencies[worker];
                 local_latencies.reserve(options.requests / options.threads + 1);
-                start_gate.arrive_and_wait();
+                start_signal.arrive_and_wait();
 
                 while (true) {
                     const std::size_t request = next_request.fetch_add(1, std::memory_order_relaxed);
@@ -245,7 +246,7 @@ int main(int argc, char* argv[]) {
             });
         }
 
-        start_gate.arrive_and_wait();
+        start_signal.arrive_and_wait();
         const auto started = std::chrono::steady_clock::now();
         for (auto& worker : workers) {
             worker.join();
@@ -262,7 +263,20 @@ int main(int argc, char* argv[]) {
         const double average_us = std::accumulate(all_latencies.begin(), all_latencies.end(), 0.0) /
                                   all_latencies.size();
 
-        std::cout << std::fixed << std::setprecision(2);
+        const double requests_per_second = options.requests / elapsed_seconds;
+        if (options.format == "csv") {
+            std::cout << std::fixed << std::setprecision(6)
+                      << "algorithm,clients,requests,threads,pool_size,elapsed_seconds,requests_per_second,"
+                         "average_latency_us,p50_latency_us,p95_latency_us,p99_latency_us,allowed,rejected,errors\n"
+                      << options.algorithm << ',' << options.clients << ',' << options.requests << ','
+                      << options.threads << ',' << options.pool_size << ',' << elapsed_seconds << ','
+                      << requests_per_second << ',' << average_us << ','
+                      << percentile_us(all_latencies, 0.50) << ','
+                      << percentile_us(all_latencies, 0.95) << ','
+                      << percentile_us(all_latencies, 0.99) << ',' << allowed.load() << ','
+                      << rejected.load() << ',' << errors.load() << '\n';
+        } else {
+            std::cout << std::fixed << std::setprecision(2);
         std::cout << "Benchmark results\n"
                   << "  Algorithm:         " << options.algorithm << '\n'
                   << "  Requests:          " << options.requests << '\n'
@@ -270,7 +284,7 @@ int main(int argc, char* argv[]) {
                   << "  Threads:           " << options.threads << '\n'
                   << "  Redis pool size:   " << options.pool_size << '\n'
                   << "  Elapsed:           " << elapsed_seconds << " s\n"
-                  << "  Requests/sec:      " << options.requests / elapsed_seconds << '\n'
+                  << "  Requests/sec:      " << requests_per_second << '\n'
                   << "  Average latency:   " << average_us << " us\n"
                   << "  P50 latency:       " << percentile_us(all_latencies, 0.50) << " us\n"
                   << "  P95 latency:       " << percentile_us(all_latencies, 0.95) << " us\n"
@@ -278,6 +292,7 @@ int main(int argc, char* argv[]) {
                   << "  Allowed requests:  " << allowed.load() << '\n'
                   << "  Rejected requests: " << rejected.load() << '\n'
                   << "  Errors:            " << errors.load() << '\n';
+        }
         if (!first_error.empty()) {
             std::cerr << "First request error: " << first_error << '\n';
             return 2;
