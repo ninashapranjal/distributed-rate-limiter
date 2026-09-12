@@ -1,6 +1,6 @@
 # Distributed Rate Limiter
 
-A C++17 project that implements common rate-limiting algorithms with Redis. Each
+Implementing common rate-limiting algorithms with Redis. Each
 request is accepted or rejected by an atomic Redis Lua operation, which makes the
 limiters safe to use from multiple processes or threads at the same time.
 
