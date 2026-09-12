@@ -1,8 +1,6 @@
 # Distributed Rate Limiter
 
-Implementing common rate-limiting algorithms with Redis. Each
-request is accepted or rejected by an atomic Redis Lua operation, which makes the
-limiters safe to use from multiple processes or threads at the same time.
+Implementing common rate-limiting algorithms using Redis and atomic Lua scripts to safely accept or reject requests across concurrent threads and processes.
 
 ## What is included
 
